@@ -435,12 +435,14 @@ function processInterfaceFile(array $fedLookup, string $interfacePath, string $o
         $matchCount = 0;
         foreach ($group['rows'] as $rowIndex => $row) {
             $normalizedPortSystemName = normalizeValue(getRowValue($row, $portSystemNameIndex));
-            if (
-                $normalizedPortSystemName !== ''
-                && isset($fedLookup[$normalizedPortSystemName])
-                && isset($lastMatchIndexByPortSystemName[$normalizedPortSystemName])
-                && $lastMatchIndexByPortSystemName[$normalizedPortSystemName] === $rowIndex
-            ) {
+            if ($normalizedPortSystemName !== '' && isset($fedLookup[$normalizedPortSystemName])) {
+                if (
+                    isset($lastMatchIndexByPortSystemName[$normalizedPortSystemName])
+                    && $lastMatchIndexByPortSystemName[$normalizedPortSystemName] !== $rowIndex
+                ) {
+                    continue;
+                }
+
                 $row[$portSystemNameIndex] = $fedLookup[$normalizedPortSystemName]['new_stu_system_name'];
                 $matchCount++;
             }
