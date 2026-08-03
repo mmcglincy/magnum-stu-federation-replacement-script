@@ -5,7 +5,7 @@ declare(strict_types=1);
 ini_set('memory_limit', '-1');
 set_time_limit(0);
 
-const FED_SUFFIX = ' -FED';
+const FED_SUFFIX = ' FED';
 const CSV_SEPARATOR = ',';
 const CSV_ENCLOSURE = '"';
 const CSV_ESCAPE = '\\';
@@ -627,7 +627,7 @@ function appendFedSuffix(string $value): string
         return FED_SUFFIX;
     }
 
-    if (preg_match('/\s+-fed$/i', $trimmed) === 1) {
+    if (preg_match('/\s+fed$/i', $trimmed) === 1) {
         return $trimmed;
     }
 
@@ -643,6 +643,10 @@ function buildMergedNamesetRow(array $newMatchedRow, array $previousMatchedRow, 
     }
 
     foreach ($columnIndexes as $columnIndex) {
+        if (trim(getRowValue($mergedRow, $columnIndex)) !== '') {
+            continue;
+        }
+
         $mergedRow[$columnIndex] = getRowValue($previousMatchedRow, $columnIndex);
     }
 
