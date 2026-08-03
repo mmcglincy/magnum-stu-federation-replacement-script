@@ -43,8 +43,7 @@ function main(array $argv): void
     );
 
     echo "Nameset matches: {$namesetResult['count']} -> {$namesetResult['path']}" . PHP_EOL;
-    echo "Tag matches (first 2 columns): {$tagResult['first_two_count']} -> {$tagResult['first_two_path']}" . PHP_EOL;
-    echo "Tag matches (full rows): {$tagResult['full_count']} -> {$tagResult['full_path']}" . PHP_EOL;
+    echo "Tag matches: {$tagResult['match_count']} ({$tagResult['row_count']} rows written) -> {$tagResult['path']}" . PHP_EOL;
 
     foreach ($interfaceResults as $result) {
         echo "Interface matches [{$result['interface_name']}]: {$result['match_count']} -> {$result['path']}" . PHP_EOL;
@@ -232,6 +231,8 @@ function processNamesetFile(array $fedLookup, string $namesetPath, string $outpu
     $suffixColumnNames = [
         'Global',
         'Generic',
+        'Remote',
+        'Local',
         'Remote Local',
         'ALIAS-DNF',
         'Hardware Loc',
@@ -247,7 +248,7 @@ function processNamesetFile(array $fedLookup, string $namesetPath, string $outpu
         }
     }
 
-    $outputPath = buildOutputPath($outputDir, 'nameset_matches', $timestamp);
+    $outputPath = buildOutputPath($outputDir, 'nameset', $timestamp);
     $outputHandle = openCsvForWrite($outputPath);
     writeCsvRow($outputHandle, $header);
 
@@ -261,6 +262,8 @@ function processNamesetFile(array $fedLookup, string $namesetPath, string $outpu
         if (shouldAppendFedSuffix($row, $suffixColumnIndexes)) {
             $row[$portNameIndex] = appendFedSuffix(getRowValue($row, $portNameIndex));
         }
+
+        $row = appendFedSuffixToColumns($row, $suffixColumnIndexes);
 
         writeCsvRow($outputHandle, $row);
         $count++;
@@ -280,18 +283,12 @@ function processTagFile(array $fedLookup, string $tagPath, string $outputDir, st
 
     $nameSystemIndex = getRequiredHeaderIndex($headerMap, 'NAME (System)', $tagPath);
 
-    $firstTwoPath = buildOutputPath($outputDir, 'tag_matches_first_two_columns', $timestamp);
-    $fullPath = buildOutputPath($outputDir, 'tag_matches_full_rows', $timestamp);
+    $outputPath = buildOutputPath($outputDir, 'tag', $timestamp);
+    $outputHandle = openCsvForWrite($outputPath);
+    writeCsvRow($outputHandle, $header);
 
-    $firstTwoHandle = openCsvForWrite($firstTwoPath);
-    $fullHandle = openCsvForWrite($fullPath);
-
-    $firstTwoHeader = array_slice($header, 0, min(2, count($header)));
-    writeCsvRow($firstTwoHandle, $firstTwoHeader);
-    writeCsvRow($fullHandle, $header);
-
-    $firstTwoCount = 0;
-    $fullCount = 0;
+    $matchCount = 0;
+    $rowCount = 0;
 
     while (($row = readCsvRow($handle)) !== false) {
         $normalizedNameSystem = normalizeValue(getRowValue($row, $nameSystemIndex));
@@ -299,25 +296,28 @@ function processTagFile(array $fedLookup, string $tagPath, string $outputDir, st
             continue;
         }
 
-        $firstTwoRow = array_slice($row, 0, count($firstTwoHeader));
-        writeCsvRow($firstTwoHandle, $firstTwoRow);
-        $firstTwoCount++;
+        $firstTwoRow = array_fill(0, count($header), '');
+        $firstTwoRow[0] = getRowValue($row, 0);
+        if (count($header) > 1) {
+            $firstTwoRow[1] = getRowValue($row, 1);
+        }
+        writeCsvRow($outputHandle, $firstTwoRow);
+        $rowCount++;
 
         $fullRow = $row;
         $fullRow[$nameSystemIndex] = $fedLookup[$normalizedNameSystem]['stu_system_name'];
-        writeCsvRow($fullHandle, $fullRow);
-        $fullCount++;
+        writeCsvRow($outputHandle, $fullRow);
+        $matchCount++;
+        $rowCount++;
     }
 
     fclose($handle);
-    fclose($firstTwoHandle);
-    fclose($fullHandle);
+    fclose($outputHandle);
 
     return [
-        'first_two_count' => $firstTwoCount,
-        'first_two_path' => $firstTwoPath,
-        'full_count' => $fullCount,
-        'full_path' => $fullPath,
+        'match_count' => $matchCount,
+        'row_count' => $rowCount,
+        'path' => $outputPath,
     ];
 }
 
@@ -486,6 +486,19 @@ function shouldAppendFedSuffix(array $row, array $suffixColumnIndexes): bool
     return false;
 }
 
+function appendFedSuffixToColumns(array $row, array $columnIndexes): array
+{
+    foreach ($columnIndexes as $columnIndex) {
+        if (trim(getRowValue($row, $columnIndex)) === '') {
+            continue;
+        }
+
+        $row[$columnIndex] = appendFedSuffix(getRowValue($row, $columnIndex));
+    }
+
+    return $row;
+}
+
 function appendFedSuffix(string $value): string
 {
     $trimmed = trim($value);
@@ -502,7 +515,7 @@ function appendFedSuffix(string $value): string
 
 function buildOutputPath(string $outputDir, string $baseName, string $timestamp): string
 {
-    return $outputDir . DIRECTORY_SEPARATOR . $baseName . '_' . $timestamp . '.csv';
+    return $outputDir . DIRECTORY_SEPARATOR . $timestamp . '_' . $baseName . '.csv';
 }
 
 function sanitizeFilenameComponent(string $value): string
