@@ -196,9 +196,10 @@ For each interface row:
 
 1. Match `interface.Port System Name` to `fed.STU System Name`
 2. If there is no match, write the row unchanged
-3. If there are one or more matching rows within the same `Interface Name`, only the last matching row is written
-4. Earlier matching rows in that same interface output are omitted
-5. The last matching row has `Port System Name` replaced with `fed.New STU System Name`
+3. If a matched `Port System Name` appears only once within the same `Interface Name`, that row is written and replaced
+4. If the same matched `Port System Name` appears multiple times within the same `Interface Name`, only the last occurrence is written
+5. Earlier duplicate matched rows for that same `Port System Name` are omitted
+6. Any written matched row has `Port System Name` replaced with `fed.New STU System Name`
 
 ### Interface terminal output
 
