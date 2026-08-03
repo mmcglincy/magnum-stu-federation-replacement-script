@@ -195,9 +195,10 @@ The first row of each output file is the interface header row.
 For each interface row:
 
 1. Match `interface.Port System Name` to `fed.STU System Name`
-2. If a match is found, replace `Port System Name` with `fed.New STU System Name`
-3. Write the row to the output file for that row's `Interface Name`
-4. If there is no match, write the row unchanged
+2. If there is no match, write the row unchanged
+3. If there are one or more matching rows within the same `Interface Name`, only the last matching row is written
+4. Earlier matching rows in that same interface output are omitted
+5. The last matching row has `Port System Name` replaced with `fed.New STU System Name`
 
 ### Interface terminal output
 
