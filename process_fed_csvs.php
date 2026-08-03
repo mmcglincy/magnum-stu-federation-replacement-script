@@ -276,8 +276,9 @@ function processNamesetFile(array $fedRows, string $namesetPath, string $outputD
             continue;
         }
 
+        $matchedSourceRow = $namesetRowLookup[$normalizedStuSystemName];
         $matchedRow = buildAdjustedNamesetRow(
-            $namesetRowLookup[$normalizedStuSystemName],
+            $matchedSourceRow,
             $portNameIndex,
             $suffixColumnIndexes
         );
@@ -292,7 +293,7 @@ function processNamesetFile(array $fedRows, string $namesetPath, string $outputD
 
         $mergedRow = buildMergedNamesetRow(
             $namesetRowLookup[$normalizedNewStuSystemName],
-            $matchedRow,
+            $matchedSourceRow,
             $suffixColumnIndexes,
             count($header)
         );
