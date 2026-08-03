@@ -422,24 +422,21 @@ function processInterfaceFile(array $fedLookup, string $interfacePath, string $o
         $writerHandle = openCsvForWrite($path);
         writeCsvRow($writerHandle, $header);
 
-        $lastMatchIndexByPortSystemName = [];
+        $lastMatchRowIndex = null;
         foreach ($group['rows'] as $rowIndex => $row) {
             $normalizedPortSystemName = normalizeValue(getRowValue($row, $portSystemNameIndex));
             if ($normalizedPortSystemName === '' || !isset($fedLookup[$normalizedPortSystemName])) {
                 continue;
             }
 
-            $lastMatchIndexByPortSystemName[$normalizedPortSystemName] = $rowIndex;
+            $lastMatchRowIndex = $rowIndex;
         }
 
         $matchCount = 0;
         foreach ($group['rows'] as $rowIndex => $row) {
             $normalizedPortSystemName = normalizeValue(getRowValue($row, $portSystemNameIndex));
             if ($normalizedPortSystemName !== '' && isset($fedLookup[$normalizedPortSystemName])) {
-                if (
-                    isset($lastMatchIndexByPortSystemName[$normalizedPortSystemName])
-                    && $lastMatchIndexByPortSystemName[$normalizedPortSystemName] !== $rowIndex
-                ) {
+                if ($lastMatchRowIndex !== $rowIndex) {
                     continue;
                 }
 
