@@ -42,11 +42,11 @@ function main(array $argv): void
         $timestamp
     );
 
-    echo "Nameset matches: {$namesetResult['match_count']} ({$namesetResult['row_count']} rows written) -> {$namesetResult['path']}" . PHP_EOL;
-    echo "Tag matches: {$tagResult['match_count']} ({$tagResult['row_count']} rows written) -> {$tagResult['path']}" . PHP_EOL;
+    echo "Nameset matches: {$namesetResult['match_count']} ({$namesetResult['row_count']} rows written)" . PHP_EOL;
+    echo "Tag matches: {$tagResult['match_count']} ({$tagResult['row_count']} rows written)" . PHP_EOL;
 
     foreach ($interfaceResults as $result) {
-        echo "Interface matches [{$result['interface_name']}]: {$result['match_count']} -> {$result['path']}" . PHP_EOL;
+        echo "Interface matches [{$result['interface_name']}]: {$result['match_count']}" . PHP_EOL;
     }
 }
 

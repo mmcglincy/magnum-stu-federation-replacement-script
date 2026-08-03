@@ -150,7 +150,6 @@ The script echoes:
 
 - match count
 - total rows written
-- output file path
 
 ## Tag Output
 
@@ -182,7 +181,6 @@ The script echoes:
 
 - first-match count
 - total rows written
-- output file path
 
 ## Interface Output
 
@@ -207,7 +205,6 @@ The script echoes one line per interface output file showing:
 
 - interface name
 - number of matched/replaced rows
-- output file path
 
 ## Duplicate Match Behavior
 
