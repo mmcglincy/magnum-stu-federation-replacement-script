@@ -29,7 +29,7 @@ function main(array $argv): void
     );
 
     $tagResult = processTagFile(
-        $fedData['lookup'],
+        $fedData['rows'],
         $options['tag'],
         $options['output-dir'],
         $timestamp
@@ -169,6 +169,7 @@ function buildFedLookup(string $fedPath): array
     $newStuIndex = getRequiredHeaderIndex($headerMap, 'New STU System Name', $fedPath);
 
     $lookup = [];
+    $rows = [];
     $rowNumber = 1;
     $duplicateCount = 0;
     $conflictingNewNameCount = 0;
@@ -183,6 +184,10 @@ function buildFedLookup(string $fedPath): array
         }
 
         $newStuSystemName = trim(getRowValue($row, $newStuIndex));
+        $rows[] = [
+            'stu_system_name' => trim($stuSystemName),
+            'new_stu_system_name' => $newStuSystemName,
+        ];
 
         if (!isset($lookup[$normalizedStu])) {
             $lookup[$normalizedStu] = [
@@ -218,7 +223,10 @@ function buildFedLookup(string $fedPath): array
         );
     }
 
-    return ['lookup' => $lookup];
+    return [
+        'lookup' => $lookup,
+        'rows' => $rows,
+    ];
 }
 
 function processNamesetFile(array $fedLookup, string $namesetPath, string $outputDir, string $timestamp): array
@@ -275,13 +283,38 @@ function processNamesetFile(array $fedLookup, string $namesetPath, string $outpu
     return ['count' => $count, 'path' => $outputPath];
 }
 
-function processTagFile(array $fedLookup, string $tagPath, string $outputDir, string $timestamp): array
+function processTagFile(array $fedRows, string $tagPath, string $outputDir, string $timestamp): array
 {
     $handle = openCsvForRead($tagPath);
     $header = readCsvHeader($handle, $tagPath);
     $headerMap = buildHeaderMap($header);
 
     $nameSystemIndex = getRequiredHeaderIndex($headerMap, 'NAME (System)', $tagPath);
+    $tagRowLookup = [];
+    $duplicateTagCount = 0;
+
+    while (($row = readCsvRow($handle)) !== false) {
+        $normalizedNameSystem = normalizeValue(getRowValue($row, $nameSystemIndex));
+        if ($normalizedNameSystem === '') {
+            continue;
+        }
+
+        if (!isset($tagRowLookup[$normalizedNameSystem])) {
+            $tagRowLookup[$normalizedNameSystem] = $row;
+            continue;
+        }
+
+        $duplicateTagCount++;
+    }
+
+    fclose($handle);
+
+    if ($duplicateTagCount > 0) {
+        fwrite(
+            STDERR,
+            "Warning: encountered {$duplicateTagCount} duplicate NAME (System) value(s) in the tag file; using the first occurrence for each match." . PHP_EOL
+        );
+    }
 
     $outputPath = buildOutputPath($outputDir, 'tag', $timestamp);
     $outputHandle = openCsvForWrite($outputPath);
@@ -289,29 +322,31 @@ function processTagFile(array $fedLookup, string $tagPath, string $outputDir, st
 
     $matchCount = 0;
     $rowCount = 0;
+    $columnCount = count($header);
 
-    while (($row = readCsvRow($handle)) !== false) {
-        $normalizedNameSystem = normalizeValue(getRowValue($row, $nameSystemIndex));
-        if ($normalizedNameSystem === '' || !isset($fedLookup[$normalizedNameSystem])) {
+    foreach ($fedRows as $fedRow) {
+        $normalizedStuSystemName = normalizeValue($fedRow['stu_system_name']);
+        if ($normalizedStuSystemName === '' || !isset($tagRowLookup[$normalizedStuSystemName])) {
             continue;
         }
 
-        $firstTwoRow = array_fill(0, count($header), '');
-        $firstTwoRow[0] = getRowValue($row, 0);
-        if (count($header) > 1) {
-            $firstTwoRow[1] = getRowValue($row, 1);
-        }
+        $matchedRow = $tagRowLookup[$normalizedStuSystemName];
+        $firstTwoRow = buildStrippedTagRow($matchedRow, $columnCount);
         writeCsvRow($outputHandle, $firstTwoRow);
+        $matchCount++;
         $rowCount++;
 
-        $fullRow = $row;
-        $fullRow[$nameSystemIndex] = $fedLookup[$normalizedNameSystem]['stu_system_name'];
-        writeCsvRow($outputHandle, $fullRow);
-        $matchCount++;
+        $normalizedNewStuSystemName = normalizeValue($fedRow['new_stu_system_name']);
+        if ($normalizedNewStuSystemName === '' || !isset($tagRowLookup[$normalizedNewStuSystemName])) {
+            continue;
+        }
+
+        $newMatchedRow = $tagRowLookup[$normalizedNewStuSystemName];
+        $mergedRow = buildMergedTagRow($newMatchedRow, $matchedRow, $columnCount);
+        writeCsvRow($outputHandle, $mergedRow);
         $rowCount++;
     }
 
-    fclose($handle);
     fclose($outputHandle);
 
     return [
@@ -511,6 +546,39 @@ function appendFedSuffix(string $value): string
     }
 
     return $trimmed . FED_SUFFIX;
+}
+
+function buildStrippedTagRow(array $row, int $columnCount): array
+{
+    $strippedRow = array_fill(0, $columnCount, '');
+    if ($columnCount > 0) {
+        $strippedRow[0] = getRowValue($row, 0);
+    }
+
+    if ($columnCount > 1) {
+        $strippedRow[1] = getRowValue($row, 1);
+    }
+
+    return $strippedRow;
+}
+
+function buildMergedTagRow(array $newMatchedRow, array $previousMatchedRow, int $columnCount): array
+{
+    $mergedRow = array_fill(0, $columnCount, '');
+
+    if ($columnCount > 0) {
+        $mergedRow[0] = getRowValue($newMatchedRow, 0);
+    }
+
+    if ($columnCount > 1) {
+        $mergedRow[1] = getRowValue($newMatchedRow, 1);
+    }
+
+    for ($index = 2; $index < $columnCount; $index++) {
+        $mergedRow[$index] = getRowValue($previousMatchedRow, $index);
+    }
+
+    return $mergedRow;
 }
 
 function buildOutputPath(string $outputDir, string $baseName, string $timestamp): string
