@@ -393,47 +393,67 @@ function processInterfaceFile(array $fedLookup, string $interfacePath, string $o
     $interfaceNameIndex = getRequiredHeaderIndex($headerMap, 'Interface Name', $interfacePath);
     $portSystemNameIndex = getRequiredHeaderIndex($headerMap, 'Port System Name', $interfacePath);
 
-    $writers = [];
+    $interfaceGroups = [];
 
     while (($row = readCsvRow($handle)) !== false) {
         $interfaceName = trim(getRowValue($row, $interfaceNameIndex));
         $interfaceKey = normalizeValue($interfaceName);
+        $displayName = $interfaceName !== '' ? $interfaceName : 'Unnamed Interface';
 
-        if (!isset($writers[$interfaceKey])) {
-            $displayName = $interfaceName !== '' ? $interfaceName : 'Unnamed Interface';
-            $path = buildOutputPath(
-                $outputDir,
-                'interface_' . sanitizeFilenameComponent($displayName),
-                $timestamp
-            );
-
-            $writerHandle = openCsvForWrite($path);
-            writeCsvRow($writerHandle, $header);
-
-            $writers[$interfaceKey] = [
-                'handle' => $writerHandle,
-                'path' => $path,
+        if (!isset($interfaceGroups[$interfaceKey])) {
+            $interfaceGroups[$interfaceKey] = [
                 'interface_name' => $displayName,
-                'match_count' => 0,
+                'rows' => [],
             ];
         }
 
-        $normalizedPortSystemName = normalizeValue(getRowValue($row, $portSystemNameIndex));
-        if ($normalizedPortSystemName !== '' && isset($fedLookup[$normalizedPortSystemName])) {
-            $row[$portSystemNameIndex] = $fedLookup[$normalizedPortSystemName]['new_stu_system_name'];
-            $writers[$interfaceKey]['match_count']++;
-        }
-
-        writeCsvRow($writers[$interfaceKey]['handle'], $row);
+        $interfaceGroups[$interfaceKey]['rows'][] = $row;
     }
 
     fclose($handle);
 
     $results = [];
-    foreach ($writers as $writer) {
-        fclose($writer['handle']);
-        unset($writer['handle']);
-        $results[] = $writer;
+    foreach ($interfaceGroups as $interfaceKey => $group) {
+        $path = buildOutputPath(
+            $outputDir,
+            'interface_' . sanitizeFilenameComponent($group['interface_name']),
+            $timestamp
+        );
+        $writerHandle = openCsvForWrite($path);
+        writeCsvRow($writerHandle, $header);
+
+        $lastMatchIndexByPortSystemName = [];
+        foreach ($group['rows'] as $rowIndex => $row) {
+            $normalizedPortSystemName = normalizeValue(getRowValue($row, $portSystemNameIndex));
+            if ($normalizedPortSystemName === '' || !isset($fedLookup[$normalizedPortSystemName])) {
+                continue;
+            }
+
+            $lastMatchIndexByPortSystemName[$normalizedPortSystemName] = $rowIndex;
+        }
+
+        $matchCount = 0;
+        foreach ($group['rows'] as $rowIndex => $row) {
+            $normalizedPortSystemName = normalizeValue(getRowValue($row, $portSystemNameIndex));
+            if (
+                $normalizedPortSystemName !== ''
+                && isset($fedLookup[$normalizedPortSystemName])
+                && isset($lastMatchIndexByPortSystemName[$normalizedPortSystemName])
+                && $lastMatchIndexByPortSystemName[$normalizedPortSystemName] === $rowIndex
+            ) {
+                $row[$portSystemNameIndex] = $fedLookup[$normalizedPortSystemName]['new_stu_system_name'];
+                $matchCount++;
+            }
+
+            writeCsvRow($writerHandle, $row);
+        }
+
+        fclose($writerHandle);
+        $results[] = [
+            'path' => $path,
+            'interface_name' => $group['interface_name'],
+            'match_count' => $matchCount,
+        ];
     }
 
     usort(
