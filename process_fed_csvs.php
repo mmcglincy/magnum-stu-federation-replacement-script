@@ -6,6 +6,9 @@ ini_set('memory_limit', '-1');
 set_time_limit(0);
 
 const FED_SUFFIX = ' -FED';
+const CSV_SEPARATOR = ',';
+const CSV_ENCLOSURE = '"';
+const CSV_ESCAPE = '\\';
 
 main($argv);
 
@@ -171,7 +174,7 @@ function buildFedLookup(string $fedPath): array
     $duplicateCount = 0;
     $conflictingNewNameCount = 0;
 
-    while (($row = fgetcsv($handle)) !== false) {
+    while (($row = readCsvRow($handle)) !== false) {
         $rowNumber++;
         $stuSystemName = getRowValue($row, $stuIndex);
         $normalizedStu = normalizeValue($stuSystemName);
@@ -246,10 +249,10 @@ function processNamesetFile(array $fedLookup, string $namesetPath, string $outpu
 
     $outputPath = buildOutputPath($outputDir, 'nameset_matches', $timestamp);
     $outputHandle = openCsvForWrite($outputPath);
-    fputcsv($outputHandle, $header);
+    writeCsvRow($outputHandle, $header);
 
     $count = 0;
-    while (($row = fgetcsv($handle)) !== false) {
+    while (($row = readCsvRow($handle)) !== false) {
         $normalizedPortName = normalizeValue(getRowValue($row, $portNameIndex));
         if ($normalizedPortName === '' || !isset($fedLookup[$normalizedPortName])) {
             continue;
@@ -259,7 +262,7 @@ function processNamesetFile(array $fedLookup, string $namesetPath, string $outpu
             $row[$portNameIndex] = appendFedSuffix(getRowValue($row, $portNameIndex));
         }
 
-        fputcsv($outputHandle, $row);
+        writeCsvRow($outputHandle, $row);
         $count++;
     }
 
@@ -284,25 +287,25 @@ function processTagFile(array $fedLookup, string $tagPath, string $outputDir, st
     $fullHandle = openCsvForWrite($fullPath);
 
     $firstTwoHeader = array_slice($header, 0, min(2, count($header)));
-    fputcsv($firstTwoHandle, $firstTwoHeader);
-    fputcsv($fullHandle, $header);
+    writeCsvRow($firstTwoHandle, $firstTwoHeader);
+    writeCsvRow($fullHandle, $header);
 
     $firstTwoCount = 0;
     $fullCount = 0;
 
-    while (($row = fgetcsv($handle)) !== false) {
+    while (($row = readCsvRow($handle)) !== false) {
         $normalizedNameSystem = normalizeValue(getRowValue($row, $nameSystemIndex));
         if ($normalizedNameSystem === '' || !isset($fedLookup[$normalizedNameSystem])) {
             continue;
         }
 
         $firstTwoRow = array_slice($row, 0, count($firstTwoHeader));
-        fputcsv($firstTwoHandle, $firstTwoRow);
+        writeCsvRow($firstTwoHandle, $firstTwoRow);
         $firstTwoCount++;
 
         $fullRow = $row;
         $fullRow[$nameSystemIndex] = $fedLookup[$normalizedNameSystem]['stu_system_name'];
-        fputcsv($fullHandle, $fullRow);
+        writeCsvRow($fullHandle, $fullRow);
         $fullCount++;
     }
 
@@ -329,7 +332,7 @@ function processInterfaceFile(array $fedLookup, string $interfacePath, string $o
 
     $writers = [];
 
-    while (($row = fgetcsv($handle)) !== false) {
+    while (($row = readCsvRow($handle)) !== false) {
         $interfaceName = trim(getRowValue($row, $interfaceNameIndex));
         $interfaceKey = normalizeValue($interfaceName);
 
@@ -342,7 +345,7 @@ function processInterfaceFile(array $fedLookup, string $interfacePath, string $o
             );
 
             $writerHandle = openCsvForWrite($path);
-            fputcsv($writerHandle, $header);
+            writeCsvRow($writerHandle, $header);
 
             $writers[$interfaceKey] = [
                 'handle' => $writerHandle,
@@ -358,7 +361,7 @@ function processInterfaceFile(array $fedLookup, string $interfacePath, string $o
             $writers[$interfaceKey]['match_count']++;
         }
 
-        fputcsv($writers[$interfaceKey]['handle'], $row);
+        writeCsvRow($writers[$interfaceKey]['handle'], $row);
     }
 
     fclose($handle);
@@ -400,9 +403,22 @@ function openCsvForWrite(string $path)
     return $handle;
 }
 
+function readCsvRow($handle): array|false
+{
+    return fgetcsv($handle, 0, CSV_SEPARATOR, CSV_ENCLOSURE, CSV_ESCAPE);
+}
+
+function writeCsvRow($handle, array $row): void
+{
+    if (fputcsv($handle, $row, CSV_SEPARATOR, CSV_ENCLOSURE, CSV_ESCAPE) === false) {
+        fwrite(STDERR, "Unable to write CSV row." . PHP_EOL);
+        exit(1);
+    }
+}
+
 function readCsvHeader($handle, string $path): array
 {
-    $header = fgetcsv($handle);
+    $header = readCsvRow($handle);
     if ($header === false) {
         fwrite(STDERR, "CSV file is empty or unreadable: {$path}" . PHP_EOL);
         exit(1);
