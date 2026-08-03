@@ -22,7 +22,7 @@ function main(array $argv): void
     $fedData = buildFedLookup($options['fed']);
 
     $namesetResult = processNamesetFile(
-        $fedData['lookup'],
+        $fedData['rows'],
         $options['nameset'],
         $options['output-dir'],
         $timestamp
@@ -42,7 +42,7 @@ function main(array $argv): void
         $timestamp
     );
 
-    echo "Nameset matches: {$namesetResult['count']} -> {$namesetResult['path']}" . PHP_EOL;
+    echo "Nameset matches: {$namesetResult['match_count']} ({$namesetResult['row_count']} rows written) -> {$namesetResult['path']}" . PHP_EOL;
     echo "Tag matches: {$tagResult['match_count']} ({$tagResult['row_count']} rows written) -> {$tagResult['path']}" . PHP_EOL;
 
     foreach ($interfaceResults as $result) {
@@ -229,58 +229,84 @@ function buildFedLookup(string $fedPath): array
     ];
 }
 
-function processNamesetFile(array $fedLookup, string $namesetPath, string $outputDir, string $timestamp): array
+function processNamesetFile(array $fedRows, string $namesetPath, string $outputDir, string $timestamp): array
 {
     $handle = openCsvForRead($namesetPath);
     $header = readCsvHeader($handle, $namesetPath);
     $headerMap = buildHeaderMap($header);
 
     $portNameIndex = getRequiredHeaderIndex($headerMap, 'Port Name', $namesetPath);
-    $suffixColumnNames = [
-        'Global',
-        'Generic',
-        'Remote',
-        'Local',
-        'Remote Local',
-        'ALIAS-DNF',
-        'Hardware Loc',
-        'TOPS',
-        'HP',
-    ];
+    $suffixColumnIndexes = buildNamesetSuffixColumnIndexes($headerMap);
+    $namesetRowLookup = [];
+    $duplicateNamesetCount = 0;
 
-    $suffixColumnIndexes = [];
-    foreach ($suffixColumnNames as $columnName) {
-        $normalized = normalizeHeaderName($columnName);
-        if (isset($headerMap[$normalized])) {
-            $suffixColumnIndexes[] = $headerMap[$normalized];
+    while (($row = readCsvRow($handle)) !== false) {
+        $normalizedPortName = normalizeValue(getRowValue($row, $portNameIndex));
+        if ($normalizedPortName === '') {
+            continue;
         }
+
+        if (!isset($namesetRowLookup[$normalizedPortName])) {
+            $namesetRowLookup[$normalizedPortName] = $row;
+            continue;
+        }
+
+        $duplicateNamesetCount++;
+    }
+
+    fclose($handle);
+
+    if ($duplicateNamesetCount > 0) {
+        fwrite(
+            STDERR,
+            "Warning: encountered {$duplicateNamesetCount} duplicate Port Name value(s) in the nameset file; using the first occurrence for each match." . PHP_EOL
+        );
     }
 
     $outputPath = buildOutputPath($outputDir, 'nameset', $timestamp);
     $outputHandle = openCsvForWrite($outputPath);
     writeCsvRow($outputHandle, $header);
 
-    $count = 0;
-    while (($row = readCsvRow($handle)) !== false) {
-        $normalizedPortName = normalizeValue(getRowValue($row, $portNameIndex));
-        if ($normalizedPortName === '' || !isset($fedLookup[$normalizedPortName])) {
+    $matchCount = 0;
+    $rowCount = 0;
+
+    foreach ($fedRows as $fedRow) {
+        $normalizedStuSystemName = normalizeValue($fedRow['stu_system_name']);
+        if ($normalizedStuSystemName === '' || !isset($namesetRowLookup[$normalizedStuSystemName])) {
             continue;
         }
 
-        if (shouldAppendFedSuffix($row, $suffixColumnIndexes)) {
-            $row[$portNameIndex] = appendFedSuffix(getRowValue($row, $portNameIndex));
+        $matchedRow = buildAdjustedNamesetRow(
+            $namesetRowLookup[$normalizedStuSystemName],
+            $portNameIndex,
+            $suffixColumnIndexes
+        );
+        writeCsvRow($outputHandle, $matchedRow);
+        $matchCount++;
+        $rowCount++;
+
+        $normalizedNewStuSystemName = normalizeValue($fedRow['new_stu_system_name']);
+        if ($normalizedNewStuSystemName === '' || !isset($namesetRowLookup[$normalizedNewStuSystemName])) {
+            continue;
         }
 
-        $row = appendFedSuffixToColumns($row, $suffixColumnIndexes);
-
-        writeCsvRow($outputHandle, $row);
-        $count++;
+        $mergedRow = buildMergedNamesetRow(
+            $namesetRowLookup[$normalizedNewStuSystemName],
+            $matchedRow,
+            $suffixColumnIndexes,
+            count($header)
+        );
+        writeCsvRow($outputHandle, $mergedRow);
+        $rowCount++;
     }
 
-    fclose($handle);
     fclose($outputHandle);
 
-    return ['count' => $count, 'path' => $outputPath];
+    return [
+        'match_count' => $matchCount,
+        'row_count' => $rowCount,
+        'path' => $outputPath,
+    ];
 }
 
 function processTagFile(array $fedRows, string $tagPath, string $outputDir, string $timestamp): array
@@ -510,6 +536,31 @@ function removeBom(string $value): string
     return preg_replace('/^\xEF\xBB\xBF/', '', $value) ?? $value;
 }
 
+function buildNamesetSuffixColumnIndexes(array $headerMap): array
+{
+    $suffixColumnNames = [
+        'Global',
+        'Generic',
+        'Remote',
+        'Local',
+        'Remote Local',
+        'ALIAS-DNF',
+        'Hardware Loc',
+        'TOPS',
+        'HP',
+    ];
+
+    $suffixColumnIndexes = [];
+    foreach ($suffixColumnNames as $columnName) {
+        $normalized = normalizeHeaderName($columnName);
+        if (isset($headerMap[$normalized])) {
+            $suffixColumnIndexes[] = $headerMap[$normalized];
+        }
+    }
+
+    return $suffixColumnIndexes;
+}
+
 function shouldAppendFedSuffix(array $row, array $suffixColumnIndexes): bool
 {
     foreach ($suffixColumnIndexes as $columnIndex) {
@@ -519,6 +570,15 @@ function shouldAppendFedSuffix(array $row, array $suffixColumnIndexes): bool
     }
 
     return false;
+}
+
+function buildAdjustedNamesetRow(array $row, int $portNameIndex, array $suffixColumnIndexes): array
+{
+    if (shouldAppendFedSuffix($row, $suffixColumnIndexes)) {
+        $row[$portNameIndex] = appendFedSuffix(getRowValue($row, $portNameIndex));
+    }
+
+    return appendFedSuffixToColumns($row, $suffixColumnIndexes);
 }
 
 function appendFedSuffixToColumns(array $row, array $columnIndexes): array
@@ -546,6 +606,21 @@ function appendFedSuffix(string $value): string
     }
 
     return $trimmed . FED_SUFFIX;
+}
+
+function buildMergedNamesetRow(array $newMatchedRow, array $previousMatchedRow, array $columnIndexes, int $columnCount): array
+{
+    $mergedRow = array_fill(0, $columnCount, '');
+
+    for ($index = 0; $index < $columnCount; $index++) {
+        $mergedRow[$index] = getRowValue($newMatchedRow, $index);
+    }
+
+    foreach ($columnIndexes as $columnIndex) {
+        $mergedRow[$columnIndex] = getRowValue($previousMatchedRow, $columnIndex);
+    }
+
+    return $mergedRow;
 }
 
 function buildStrippedTagRow(array $row, int $columnCount): array
