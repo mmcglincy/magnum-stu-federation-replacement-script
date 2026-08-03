@@ -205,6 +205,7 @@ The script echoes one line per interface output file showing:
 
 - interface name
 - number of matched/replaced rows
+- number of duplicate rows removed
 
 ## Duplicate Match Behavior
 

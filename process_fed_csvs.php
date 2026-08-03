@@ -46,7 +46,7 @@ function main(array $argv): void
     echo "Tag matches: {$tagResult['match_count']} ({$tagResult['row_count']} rows written)" . PHP_EOL;
 
     foreach ($interfaceResults as $result) {
-        echo "Interface matches [{$result['interface_name']}]: {$result['match_count']}" . PHP_EOL;
+        echo "Interface matches [{$result['interface_name']}]: {$result['match_count']} ({$result['duplicate_count']} duplicates removed)" . PHP_EOL;
     }
 }
 
@@ -450,6 +450,7 @@ function processInterfaceFile(array $fedLookup, string $interfacePath, string $o
         }
 
         $matchCount = 0;
+        $duplicateCount = 0;
         foreach ($preparedRows as $rowIndex => $preparedRow) {
             $deduplicationKey = $preparedRow['deduplication_key'];
             if (
@@ -457,6 +458,7 @@ function processInterfaceFile(array $fedLookup, string $interfacePath, string $o
                 && isset($lastRowIndexByOutputPortSystemName[$deduplicationKey])
                 && $lastRowIndexByOutputPortSystemName[$deduplicationKey] !== $rowIndex
             ) {
+                $duplicateCount++;
                 continue;
             }
 
@@ -472,6 +474,7 @@ function processInterfaceFile(array $fedLookup, string $interfacePath, string $o
             'path' => $path,
             'interface_name' => $group['interface_name'],
             'match_count' => $matchCount,
+            'duplicate_count' => $duplicateCount,
         ];
     }
 
