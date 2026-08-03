@@ -194,12 +194,12 @@ The first row of each output file is the interface header row.
 
 For each interface row:
 
-1. Group rows by their case-insensitive, trimmed `Port System Name` within each `Interface Name`
-2. If a `Port System Name` appears multiple times, only its last occurrence is written
-3. Earlier duplicate rows for that same `Port System Name` are omitted, whether or not the value matches the fed file
-4. Match each surviving `interface.Port System Name` to `fed.STU System Name`
-5. If there is a fed match, replace `Port System Name` with `fed.New STU System Name`
-6. If there is no fed match, write the surviving row unchanged
+1. Match `interface.Port System Name` to `fed.STU System Name`
+2. If there is a fed match, calculate the final output name using `fed.New STU System Name`
+3. If there is no fed match, use the original `Port System Name` as the final output name
+4. Group rows by their case-insensitive, trimmed final output name within each `Interface Name`
+5. If multiple rows produce the same final output name, only the last occurrence is written
+6. Earlier duplicate rows are omitted, including rows with different original names that map to the same new fed name
 
 ### Interface terminal output
 

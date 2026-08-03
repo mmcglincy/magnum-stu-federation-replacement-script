@@ -422,33 +422,49 @@ function processInterfaceFile(array $fedLookup, string $interfacePath, string $o
         $writerHandle = openCsvForWrite($path);
         writeCsvRow($writerHandle, $header);
 
-        $lastMatchIndexByPortSystemName = [];
+        $preparedRows = [];
+        $lastRowIndexByOutputPortSystemName = [];
+
         foreach ($group['rows'] as $rowIndex => $row) {
             $normalizedPortSystemName = normalizeValue(getRowValue($row, $portSystemNameIndex));
-            if ($normalizedPortSystemName === '') {
-                continue;
+            $matchedFed = $normalizedPortSystemName !== '' && isset($fedLookup[$normalizedPortSystemName]);
+
+            if ($matchedFed) {
+                $row[$portSystemNameIndex] = $fedLookup[$normalizedPortSystemName]['new_stu_system_name'];
             }
 
-            $lastMatchIndexByPortSystemName[$normalizedPortSystemName] = $rowIndex;
+            $normalizedOutputPortSystemName = normalizeValue(getRowValue($row, $portSystemNameIndex));
+            $deduplicationKey = $normalizedOutputPortSystemName !== ''
+                ? $normalizedOutputPortSystemName
+                : $normalizedPortSystemName;
+
+            $preparedRows[$rowIndex] = [
+                'row' => $row,
+                'matched_fed' => $matchedFed,
+                'deduplication_key' => $deduplicationKey,
+            ];
+
+            if ($deduplicationKey !== '') {
+                $lastRowIndexByOutputPortSystemName[$deduplicationKey] = $rowIndex;
+            }
         }
 
         $matchCount = 0;
-        foreach ($group['rows'] as $rowIndex => $row) {
-            $normalizedPortSystemName = normalizeValue(getRowValue($row, $portSystemNameIndex));
+        foreach ($preparedRows as $rowIndex => $preparedRow) {
+            $deduplicationKey = $preparedRow['deduplication_key'];
             if (
-                $normalizedPortSystemName !== ''
-                && isset($lastMatchIndexByPortSystemName[$normalizedPortSystemName])
-                && $lastMatchIndexByPortSystemName[$normalizedPortSystemName] !== $rowIndex
+                $deduplicationKey !== ''
+                && isset($lastRowIndexByOutputPortSystemName[$deduplicationKey])
+                && $lastRowIndexByOutputPortSystemName[$deduplicationKey] !== $rowIndex
             ) {
                 continue;
             }
 
-            if ($normalizedPortSystemName !== '' && isset($fedLookup[$normalizedPortSystemName])) {
-                $row[$portSystemNameIndex] = $fedLookup[$normalizedPortSystemName]['new_stu_system_name'];
+            if ($preparedRow['matched_fed']) {
                 $matchCount++;
             }
 
-            writeCsvRow($writerHandle, $row);
+            writeCsvRow($writerHandle, $preparedRow['row']);
         }
 
         fclose($writerHandle);
