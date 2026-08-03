@@ -237,6 +237,7 @@ function processNamesetFile(array $fedRows, string $namesetPath, string $outputD
 
     $portNameIndex = getRequiredHeaderIndex($headerMap, 'Port Name', $namesetPath);
     $suffixColumnIndexes = buildNamesetSuffixColumnIndexes($headerMap);
+    $carryForwardColumnIndexes = buildNamesetCarryForwardColumnIndexes($headerMap);
     $namesetRowLookup = [];
     $duplicateNamesetCount = 0;
 
@@ -294,7 +295,7 @@ function processNamesetFile(array $fedRows, string $namesetPath, string $outputD
         $mergedRow = buildMergedNamesetRow(
             $namesetRowLookup[$normalizedNewStuSystemName],
             $matchedSourceRow,
-            $suffixColumnIndexes,
+            $carryForwardColumnIndexes,
             count($header)
         );
         writeCsvRow($outputHandle, $mergedRow);
@@ -560,6 +561,30 @@ function buildNamesetSuffixColumnIndexes(array $headerMap): array
     }
 
     return $suffixColumnIndexes;
+}
+
+function buildNamesetCarryForwardColumnIndexes(array $headerMap): array
+{
+    $carryForwardColumnNames = [
+        'Global',
+        'Generic',
+        'Remote',
+        'Local',
+        'Remote Local',
+        'ALIAS-DNF',
+        'Hardware Loc',
+        'HP',
+    ];
+
+    $carryForwardColumnIndexes = [];
+    foreach ($carryForwardColumnNames as $columnName) {
+        $normalized = normalizeHeaderName($columnName);
+        if (isset($headerMap[$normalized])) {
+            $carryForwardColumnIndexes[] = $headerMap[$normalized];
+        }
+    }
+
+    return $carryForwardColumnIndexes;
 }
 
 function shouldAppendFedSuffix(array $row, array $suffixColumnIndexes): bool
