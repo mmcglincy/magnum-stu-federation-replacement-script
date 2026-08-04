@@ -196,11 +196,11 @@ The first row of each output file is the interface header row.
 For each interface row:
 
 1. Only rows whose `SRC/DST` value is `SRC` participate in fed matching and duplicate detection
-2. Group source rows by their original, case-insensitive, trimmed `Port System Name` within each `Interface Name`
-3. If the same original source `Port System Name` appears multiple times, only its last occurrence is written
-4. Distinct original source port names remain separate even if they map to the same new fed name
-5. Match each surviving source `interface.Port System Name` to `fed.STU System Name`
-6. If there is a fed match, replace `Port System Name` with `fed.New STU System Name`
+2. Match each source `interface.Port System Name` to `fed.STU System Name`
+3. If there is a fed match, replace `Port System Name` with `fed.New STU System Name`
+4. Normalize the final mapped `Port System Name` using case-insensitive comparison and trimmed whitespace
+5. Group source rows by that normalized final mapped name within each `Interface Name`
+6. If multiple source rows produce the same final mapped name, only the last occurrence is written
 7. Non-`SRC` rows are written unchanged and are not counted as matches or duplicates
 
 ### Interface duplicate output
