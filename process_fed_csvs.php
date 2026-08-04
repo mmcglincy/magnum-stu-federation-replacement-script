@@ -407,6 +407,7 @@ function processInterfaceFile(
 
     $interfaceNameIndex = getRequiredHeaderIndex($headerMap, 'Interface Name', $interfacePath);
     $portSystemNameIndex = getRequiredHeaderIndex($headerMap, 'Port System Name', $interfacePath);
+    $srcDstIndex = getRequiredHeaderIndex($headerMap, 'SRC/DST', $interfacePath);
 
     $interfaceGroups = [];
 
@@ -450,7 +451,12 @@ function processInterfaceFile(
         foreach ($group['rows'] as $rowIndex => $row) {
             $originalPortSystemName = trim(getRowValue($row, $portSystemNameIndex));
             $normalizedPortSystemName = normalizeValue($originalPortSystemName);
-            $matchedFed = $normalizedPortSystemName !== '' && isset($fedLookup[$normalizedPortSystemName]);
+            $isSourceRow = normalizeValue(getRowValue($row, $srcDstIndex)) === 'src';
+            $matchedFed = (
+                $isSourceRow
+                && $normalizedPortSystemName !== ''
+                && isset($fedLookup[$normalizedPortSystemName])
+            );
             $fedRecord = $matchedFed
                 ? $fedLookup[$normalizedPortSystemName]
                 : ($fedNewNameLookup[$normalizedPortSystemName] ?? null);
@@ -459,7 +465,7 @@ function processInterfaceFile(
                 $row[$portSystemNameIndex] = $fedLookup[$normalizedPortSystemName]['new_stu_system_name'];
             }
 
-            $deduplicationKey = $normalizedPortSystemName;
+            $deduplicationKey = $isSourceRow ? $normalizedPortSystemName : '';
 
             $preparedRows[$rowIndex] = [
                 'row' => $row,
