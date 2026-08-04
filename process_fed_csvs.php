@@ -446,7 +446,7 @@ function processInterfaceFile(
         writeCsvRow($writerHandle, $header);
 
         $preparedRows = [];
-        $lastRowIndexByOriginalPortSystemName = [];
+        $lastRowIndexByOutputPortSystemName = [];
 
         foreach ($group['rows'] as $rowIndex => $row) {
             $originalPortSystemName = trim(getRowValue($row, $portSystemNameIndex));
@@ -465,7 +465,10 @@ function processInterfaceFile(
                 $row[$portSystemNameIndex] = $fedLookup[$normalizedPortSystemName]['new_stu_system_name'];
             }
 
-            $deduplicationKey = $isSourceRow ? $normalizedPortSystemName : '';
+            $normalizedOutputPortSystemName = normalizeValue(getRowValue($row, $portSystemNameIndex));
+            $deduplicationKey = $isSourceRow
+                ? ($normalizedOutputPortSystemName !== '' ? $normalizedOutputPortSystemName : $normalizedPortSystemName)
+                : '';
 
             $preparedRows[$rowIndex] = [
                 'row' => $row,
@@ -480,7 +483,7 @@ function processInterfaceFile(
             ];
 
             if ($deduplicationKey !== '') {
-                $lastRowIndexByOriginalPortSystemName[$deduplicationKey] = $rowIndex;
+                $lastRowIndexByOutputPortSystemName[$deduplicationKey] = $rowIndex;
             }
         }
 
@@ -490,8 +493,8 @@ function processInterfaceFile(
             $deduplicationKey = $preparedRow['deduplication_key'];
             if (
                 $deduplicationKey !== ''
-                && isset($lastRowIndexByOriginalPortSystemName[$deduplicationKey])
-                && $lastRowIndexByOriginalPortSystemName[$deduplicationKey] !== $rowIndex
+                && isset($lastRowIndexByOutputPortSystemName[$deduplicationKey])
+                && $lastRowIndexByOutputPortSystemName[$deduplicationKey] !== $rowIndex
             ) {
                 $duplicateCount++;
                 writeCsvRow($duplicateOutputHandle, $preparedRow['duplicate_report_row']);
