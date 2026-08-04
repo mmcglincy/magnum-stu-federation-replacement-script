@@ -54,6 +54,7 @@ The script is configured for large CSV files:
 
 - `STU System Name`
 - `New STU System Name`
+- `STU TOPS Name`
 
 ### Nameset file
 
@@ -89,6 +90,7 @@ Examples:
 - `20260803_1748_nameset.csv`
 - `20260803_1748_tag.csv`
 - `20260803_1748_interface_IF-1.csv`
+- `20260803_1748_interface_duplicates.csv`
 
 ## Nameset Output
 
@@ -198,6 +200,21 @@ For each interface row:
 4. Group rows by their case-insensitive, trimmed final output name within each `Interface Name`
 5. If multiple rows produce the same final output name, only the last occurrence is written
 6. Earlier duplicate rows are omitted, including rows with different original names that map to the same new fed name
+
+### Interface duplicate output
+
+The script writes one combined duplicate-report file:
+
+- `{timestamp}_interface_duplicates.csv`
+
+The file contains one row for every interface row omitted as a duplicate, with these columns:
+
+- `Interface Name`
+- `Port System Name`
+- `New STU System Name`
+- `STU TOPS Name`
+
+`Port System Name` is the original value from the omitted interface row. The new STU and TOPS names are resolved from the fed file. If the omitted port name has no fed mapping, those two fields are blank.
 
 ### Interface terminal output
 

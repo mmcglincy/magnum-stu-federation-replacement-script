@@ -37,6 +37,7 @@ function main(array $argv): void
 
     $interfaceResults = processInterfaceFile(
         $fedData['lookup'],
+        $fedData['new_name_lookup'],
         $options['interface'],
         $options['output-dir'],
         $timestamp
@@ -167,8 +168,10 @@ function buildFedLookup(string $fedPath): array
 
     $stuIndex = getRequiredHeaderIndex($headerMap, 'STU System Name', $fedPath);
     $newStuIndex = getRequiredHeaderIndex($headerMap, 'New STU System Name', $fedPath);
+    $stuTopsIndex = getRequiredHeaderIndex($headerMap, 'STU TOPS Name', $fedPath);
 
     $lookup = [];
+    $newNameLookup = [];
     $rows = [];
     $rowNumber = 1;
     $duplicateCount = 0;
@@ -184,17 +187,22 @@ function buildFedLookup(string $fedPath): array
         }
 
         $newStuSystemName = trim(getRowValue($row, $newStuIndex));
-        $rows[] = [
+        $stuTopsName = trim(getRowValue($row, $stuTopsIndex));
+        $fedRecord = [
             'stu_system_name' => trim($stuSystemName),
             'new_stu_system_name' => $newStuSystemName,
+            'stu_tops_name' => $stuTopsName,
+            'row_number' => $rowNumber,
         ];
+        $rows[] = $fedRecord;
+
+        $normalizedNewStu = normalizeValue($newStuSystemName);
+        if ($normalizedNewStu !== '' && !isset($newNameLookup[$normalizedNewStu])) {
+            $newNameLookup[$normalizedNewStu] = $fedRecord;
+        }
 
         if (!isset($lookup[$normalizedStu])) {
-            $lookup[$normalizedStu] = [
-                'stu_system_name' => trim($stuSystemName),
-                'new_stu_system_name' => $newStuSystemName,
-                'row_number' => $rowNumber,
-            ];
+            $lookup[$normalizedStu] = $fedRecord;
             continue;
         }
 
@@ -225,6 +233,7 @@ function buildFedLookup(string $fedPath): array
 
     return [
         'lookup' => $lookup,
+        'new_name_lookup' => $newNameLookup,
         'rows' => $rows,
     ];
 }
@@ -384,7 +393,13 @@ function processTagFile(array $fedRows, string $tagPath, string $outputDir, stri
     ];
 }
 
-function processInterfaceFile(array $fedLookup, string $interfacePath, string $outputDir, string $timestamp): array
+function processInterfaceFile(
+    array $fedLookup,
+    array $fedNewNameLookup,
+    string $interfacePath,
+    string $outputDir,
+    string $timestamp
+): array
 {
     $handle = openCsvForRead($interfacePath);
     $header = readCsvHeader($handle, $interfacePath);
@@ -412,6 +427,13 @@ function processInterfaceFile(array $fedLookup, string $interfacePath, string $o
 
     fclose($handle);
 
+    $duplicateOutputPath = buildOutputPath($outputDir, 'interface_duplicates', $timestamp);
+    $duplicateOutputHandle = openCsvForWrite($duplicateOutputPath);
+    writeCsvRow(
+        $duplicateOutputHandle,
+        ['Interface Name', 'Port System Name', 'New STU System Name', 'STU TOPS Name']
+    );
+
     $results = [];
     foreach ($interfaceGroups as $interfaceKey => $group) {
         $path = buildOutputPath(
@@ -426,8 +448,12 @@ function processInterfaceFile(array $fedLookup, string $interfacePath, string $o
         $lastRowIndexByOutputPortSystemName = [];
 
         foreach ($group['rows'] as $rowIndex => $row) {
-            $normalizedPortSystemName = normalizeValue(getRowValue($row, $portSystemNameIndex));
+            $originalPortSystemName = trim(getRowValue($row, $portSystemNameIndex));
+            $normalizedPortSystemName = normalizeValue($originalPortSystemName);
             $matchedFed = $normalizedPortSystemName !== '' && isset($fedLookup[$normalizedPortSystemName]);
+            $fedRecord = $matchedFed
+                ? $fedLookup[$normalizedPortSystemName]
+                : ($fedNewNameLookup[$normalizedPortSystemName] ?? null);
 
             if ($matchedFed) {
                 $row[$portSystemNameIndex] = $fedLookup[$normalizedPortSystemName]['new_stu_system_name'];
@@ -442,6 +468,12 @@ function processInterfaceFile(array $fedLookup, string $interfacePath, string $o
                 'row' => $row,
                 'matched_fed' => $matchedFed,
                 'deduplication_key' => $deduplicationKey,
+                'duplicate_report_row' => [
+                    $group['interface_name'],
+                    $originalPortSystemName,
+                    $fedRecord['new_stu_system_name'] ?? '',
+                    $fedRecord['stu_tops_name'] ?? '',
+                ],
             ];
 
             if ($deduplicationKey !== '') {
@@ -459,6 +491,7 @@ function processInterfaceFile(array $fedLookup, string $interfacePath, string $o
                 && $lastRowIndexByOutputPortSystemName[$deduplicationKey] !== $rowIndex
             ) {
                 $duplicateCount++;
+                writeCsvRow($duplicateOutputHandle, $preparedRow['duplicate_report_row']);
                 continue;
             }
 
@@ -477,6 +510,8 @@ function processInterfaceFile(array $fedLookup, string $interfacePath, string $o
             'duplicate_count' => $duplicateCount,
         ];
     }
+
+    fclose($duplicateOutputHandle);
 
     usort(
         $results,
