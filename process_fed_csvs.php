@@ -277,6 +277,10 @@ function processNamesetFile(array $fedRows, string $namesetPath, string $outputD
     $outputHandle = openCsvForWrite($outputPath);
     writeCsvRow($outputHandle, $header);
 
+    $originalOutputPath = buildOutputPath($outputDir, 'nameset_original', $timestamp);
+    $originalOutputHandle = openCsvForWrite($originalOutputPath);
+    writeCsvRow($originalOutputHandle, $header);
+
     $matchCount = 0;
     $rowCount = 0;
 
@@ -287,6 +291,8 @@ function processNamesetFile(array $fedRows, string $namesetPath, string $outputD
         }
 
         $matchedSourceRow = $namesetRowLookup[$normalizedStuSystemName];
+        writeCsvRow($originalOutputHandle, $matchedSourceRow);
+
         $matchedRow = buildAdjustedNamesetRow(
             $matchedSourceRow,
             $portNameIndex,
@@ -312,11 +318,13 @@ function processNamesetFile(array $fedRows, string $namesetPath, string $outputD
     }
 
     fclose($outputHandle);
+    fclose($originalOutputHandle);
 
     return [
         'match_count' => $matchCount,
         'row_count' => $rowCount,
         'path' => $outputPath,
+        'original_path' => $originalOutputPath,
     ];
 }
 
@@ -357,6 +365,10 @@ function processTagFile(array $fedRows, string $tagPath, string $outputDir, stri
     $outputHandle = openCsvForWrite($outputPath);
     writeCsvRow($outputHandle, $header);
 
+    $originalOutputPath = buildOutputPath($outputDir, 'tag_original', $timestamp);
+    $originalOutputHandle = openCsvForWrite($originalOutputPath);
+    writeCsvRow($originalOutputHandle, $header);
+
     $matchCount = 0;
     $rowCount = 0;
     $columnCount = count($header);
@@ -368,6 +380,8 @@ function processTagFile(array $fedRows, string $tagPath, string $outputDir, stri
         }
 
         $matchedRow = $tagRowLookup[$normalizedStuSystemName];
+        writeCsvRow($originalOutputHandle, $matchedRow);
+
         $firstTwoRow = buildStrippedTagRow($matchedRow, $columnCount);
         writeCsvRow($outputHandle, $firstTwoRow);
         $matchCount++;
@@ -385,11 +399,13 @@ function processTagFile(array $fedRows, string $tagPath, string $outputDir, stri
     }
 
     fclose($outputHandle);
+    fclose($originalOutputHandle);
 
     return [
         'match_count' => $matchCount,
         'row_count' => $rowCount,
         'path' => $outputPath,
+        'original_path' => $originalOutputPath,
     ];
 }
 

@@ -89,7 +89,9 @@ All output files start with a timestamp in this format:
 Examples:
 
 - `20260803_1748_nameset.csv`
+- `20260803_1748_nameset_original.csv`
 - `20260803_1748_tag.csv`
+- `20260803_1748_tag_original.csv`
 - `20260803_1748_interface_IF-1.csv`
 - `20260803_1748_interface_duplicates.csv`
 
@@ -100,6 +102,12 @@ The script writes one nameset output file:
 - `{timestamp}_nameset.csv`
 
 The first row of the output file is the nameset header row.
+
+The script also writes an original nameset match file:
+
+- `{timestamp}_nameset_original.csv`
+
+This file uses the nameset header and contains the unmodified source row for every first nameset match between `fed.STU System Name` and `nameset.Port Name`. It does not include the ` FED` suffix or second-match changes.
 
 ### First nameset match
 
@@ -161,6 +169,12 @@ The script writes one tag output file:
 - `{timestamp}_tag.csv`
 
 The first row of the output file is the tag header row.
+
+The script also writes an original tag match file:
+
+- `{timestamp}_tag_original.csv`
+
+This file uses the tag header and contains the complete, unmodified source row for every first tag match between `fed.STU System Name` and `tag.NAME (System)`.
 
 For each fed row:
 
